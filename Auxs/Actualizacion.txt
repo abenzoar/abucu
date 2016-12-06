@@ -1,0 +1,112 @@
+ALTER TABLE `cat_apartados` ADD `aprt_UserId` int(3) default NULL,
+ADD  `aprt_UserPerId` int(13) default NULL,
+ADD  `aprt_UserPerTipo` varchar(1) default NULL,
+ADD  `aprt_FolioPago` bigint(15) NOT NULL,
+ADD  `aprt_ProdNombre` varchar(100) default NULL,
+ADD  `aprt_ProdCodigo` varchar(15) default NULL
+
+
+ALTER TABLE `pagos_apartados` add `apPg_FolioAprt` bigint(15) NOT NULL default '0'
+
+drop trigger `APRT_FINISH_PAGOS`
+
+DELIMITER ;;
+CREATE TRIGGER `APRT_FINISH_PAGOS` AFTER INSERT ON `pagos_apartados` FOR EACH ROW BEGIN
+
+	UPDATE CAT_APARTADOS T2 SET T2.aprt_Status = 'F' WHERE ((T2.APRT_PRODPRECIO * T2.APRT_PRODCANTIDAD)-T2.APRT_DESC) = 
+	(SELECT SUM(T1.APPG_PAGO) FROM PAGOS_APARTADOS T1 WHERE T1.APPG_APRTID = T2.aprt_Id);
+
+END;;
+DELIMITER ;
+
+
+UPDATE CAT_APARTADOS T1 SET T1.APRT_FOLIOPAGO = (select MIN(T2.APPG_FOLIOVENTA)  from PAGOS_APARTADOS T2 WHERE T1.APRT_ID = T2.APPG_APRTID);
+
+UPDATE CAT_APARTADOS T1 SET T1.APRT_PRODNOMBRE = (SELECT T2.APPG_PRODNOMBRE FROM PAGOS_APARTADOS T2 WHERE T2.APPG_APRTID = T1.APRT_ID AND T1.APRT_FOLIOPAGO = T2.APPG_FOLIOVENTA);
+UPDATE CAT_APARTADOS T1 SET T1.APRT_PRODCODIGO = (SELECT T2.APPG_PRODCODIGO FROM PAGOS_APARTADOS T2 WHERE T2.APPG_APRTID = T1.APRT_ID AND T1.APRT_FOLIOPAGO = T2.APPG_FOLIOVENTA);
+
+UPDATE CAT_APARTADOS T1 SET T1.APRT_USERID = (SELECT T2.APPG_MOSTID FROM PAGOS_APARTADOS T2 WHERE T2.APPG_APRTID = T1.APRT_ID AND T1.APRT_FOLIOPAGO = T2.APPG_FOLIOVENTA);
+UPDATE CAT_APARTADOS T1 SET T1.APRT_USERPERID = (SELECT T2.PAPG_MOSTPERID FROM PAGOS_APARTADOS T2 WHERE T2.APPG_APRTID = T1.APRT_ID AND T1.APRT_FOLIOPAGO = T2.APPG_FOLIOVENTA);
+UPDATE CAT_APARTADOS T1 SET T1.APRT_USERPERTIPO = (SELECT T2.APPG_MOSTPERTIPO FROM PAGOS_APARTADOS T2 WHERE T2.APPG_APRTID = T1.APRT_ID AND T1.APRT_FOLIOPAGO = T2.APPG_FOLIOVENTA);
+
+UPDATE PAGOS_APARTADOS T1 SET T1.APPG_FOLIOAPRT = (SELECT T2.APRT_FOLIOPAGO FROM CAT_APARTADOS T2 WHERE T1.APPG_APRTID = T2.APRT_ID);
+
+	UPDATE CAT_APARTADOS T2 SET T2.aprt_Status = 'F' WHERE ((T2.APRT_PRODPRECIO * T2.APRT_PRODCANTIDAD)-T2.APRT_DESC) = 
+	(SELECT SUM(T1.APPG_PAGO) FROM PAGOS_APARTADOS T1 WHERE T1.APPG_APRTID = T2.aprt_Id);
+
+
+select T1.APRT_ID,T1.APRT_FOLIOPAGO, T2.APPG_FOLIOVENTA, T2.APPG_FOLIOAPRT,  T1.APRT_PRODNOMBRE, T2.APPG_PRODNOMBRE
+from cat_apartados T1, PAGOS_APARTADOS T2
+WHERE T1.APRT_ID = T2.APPG_APRTID
+ORDER BY T1.APRT_ID 
+
+ALTER TABLE `cambios`  add `cmd_Tipo` varchar(1) default NULL COMMENT 'V=VENTA, A=APARTADO'
+
+
+
+
+
+
+
+-- ----------------------------
+-- View structure for view_apartados
+-- ----------------------------
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `view_apartados` AS select sql_no_cache `t1`.`aprt_FolioPago` AS `FOLIO`,`t1`.`aprt_Id` AS `APARTADO`,`t1`.`aprt_FechaHora` AS `FECHA`,concat(`t3`.`PER_NOMBRE`,_latin1' ',`t3`.`PER_PATERNO`,_latin1' ',`t3`.`PER_MATERNO`) AS `CLIENTE`,(select sql_no_cache sum(((`tb1`.`aprt_ProdPrecio` * `tb1`.`aprt_ProdCantidad`) - `tb1`.`aprt_Desc`)) AS `SUM(((TB1.APRT_PRODPRECIO * TB1.APRT_PRODCANTIDAD) - TB1.APRT_DESC))` from `cat_apartados` `TB1` where (`tb1`.`aprt_FolioPago` = `t1`.`aprt_FolioPago`)) AS `TOTAL`,(select sql_no_cache sum(`tb1`.`apPg_Pago`) AS `SUM( TB1.APPG_PAGO )` from `pagos_apartados` `TB1` where (`tb1`.`apPg_FolioAprt` = `t1`.`aprt_FolioPago`)) AS `PAGADO`,((select sql_no_cache sum(((`tb1`.`aprt_ProdPrecio` * `tb1`.`aprt_ProdCantidad`) - `tb1`.`aprt_Desc`)) AS `SUM(((TB1.APRT_PRODPRECIO * TB1.APRT_PRODCANTIDAD) - TB1.APRT_DESC))` from `cat_apartados` `TB1` where (`tb1`.`aprt_FolioPago` = `t1`.`aprt_FolioPago`)) - (select sql_no_cache sum(`tb1`.`apPg_Pago`) AS `SUM( TB1.APPG_PAGO )` from `pagos_apartados` `TB1` where (`tb1`.`apPg_FolioAprt` = `t1`.`aprt_FolioPago`))) AS `ADEUDO`,`t1`.`aprt_ProdId` AS `APRT_PRODID`,`t1`.`aprt_ProdServ` AS `APRT_PRODSERV`,`t1`.`aprt_ProdNombre` AS `PRODUCTO`,`t1`.`aprt_ProdCodigo` AS `CODIGO`,`t1`.`aprt_ProdPrecio` AS `PRECIO`,`t1`.`aprt_ProdCantidad` AS `CANTIDAD`,`t1`.`aprt_Desc` AS `DESCUENTO`,((`t1`.`aprt_ProdPrecio` * `t1`.`aprt_ProdCantidad`) - `t1`.`aprt_Desc`) AS `TOTAL_PROD`,sum(`t4`.`apPg_Pago`) AS `PAGOS_PROD`,(((`t1`.`aprt_ProdPrecio` * `t1`.`aprt_ProdCantidad`) - `t1`.`aprt_Desc`) - sum(`t4`.`apPg_Pago`)) AS `ADEUDO_PROD`,`t2`.`ctpr_Periodo` AS `PERIODO`,(`t2`.`ctpr_Dias` * `t1`.`aprt_PagosCant`) AS `DIAS`,(to_days(now()) - to_days(`t1`.`aprt_FechaHora`)) AS `TRANSCURRIDOS`,(`t1`.`aprt_FechaHora` + interval (`t2`.`ctpr_Dias` * `t1`.`aprt_PagosCant`) day) AS `LIQUIDACION`,if((`t1`.`aprt_Status` = _latin1'A'),_utf8'ACTIVO',if((`t1`.`aprt_Status` = _latin1'C'),_utf8'CANCELADO',_utf8'CONCLUIDO')) AS `STATUS`,concat(`t5`.`PER_NOMBRE`,_latin1' ',`t5`.`PER_PATERNO`,_latin1' ',`t5`.`PER_MATERNO`) AS `MOSTRADOR`,concat(`t6`.`PER_NOMBRE`,_latin1' ',`t6`.`PER_PATERNO`,_latin1' ',`t6`.`PER_MATERNO`) AS `VENDEDOR`,`t1`.`aprt_ClieId` AS `APRT_CLIEID`,`t1`.`aprt_CliePerId` AS `APRT_CLIEPERID`,`t1`.`aprt_MostId` AS `APRT_MOSTID`,`t1`.`aprt_MostPerId` AS `APRT_MOSTPERID`,`t1`.`aprt_UserId` AS `APRT_USERID`,`t1`.`aprt_UserPerId` AS `APRT_USERPERID`,`t3`.`PER_TEL1` AS `TEL1`,`t3`.`PER_TEL2` AS `TEL2`,`t3`.`PER_DIR_COLONIA` AS `COLONIA`,`t3`.`PER_DIR_CP` AS `CP`,`t3`.`PER_DIR_CALLE` AS `CALLE`,`t3`.`PER_DIR_NUM_EXT` AS `NUME`,`t3`.`PER_DIR_NUM_INT` AS `NUMI`,`t3`.`PER_EMAIL` AS `EMAIL` from (((((`cat_apartados` `T1` join `persona` `T3`) join `pagos_apartados` `T4`) join `cat_periodo` `T2`) join `persona` `T5`) join `persona` `T6`) where ((`t1`.`aprt_CliePerId` = `t3`.`PER_ID`) and (`t1`.`aprt_FolioPago` = `t4`.`apPg_FolioAprt`) and (`t1`.`aprt_Id` = `t4`.`apPg_aprtId`) and (`t1`.`aprt_ProdId` = `t4`.`apPg_ProdId`) and (`t1`.`aprt_Periodo` = `t2`.`ctid_Periodo`) and (`t1`.`aprt_MostPerId` = `t5`.`PER_ID`) and (`t1`.`aprt_UserPerId` = `t6`.`PER_ID`)) group by `t1`.`aprt_Id`,`t1`.`aprt_FechaHora`,`t1`.`aprt_ProdNombre`,`t1`.`aprt_ProdCodigo`,`t1`.`aprt_ProdPrecio`,`t1`.`aprt_Desc`,((`t1`.`aprt_ProdPrecio` * `t1`.`aprt_ProdCantidad`) - `t1`.`aprt_Desc`),((`t1`.`aprt_ProdPrecio` * `t1`.`aprt_ProdCantidad`) - `t1`.`aprt_Desc`),concat(`t5`.`PER_NOMBRE`,_latin1' ',`t5`.`PER_PATERNO`,_latin1' ',`t5`.`PER_MATERNO`),concat(`t6`.`PER_NOMBRE`,_latin1' ',`t6`.`PER_PATERNO`,_latin1' ',`t6`.`PER_MATERNO`),`t1`.`aprt_ClieId`,`t1`.`aprt_CliePerId`,`t1`.`aprt_MostId`,`t1`.`aprt_MostPerId`,`t1`.`aprt_UserId`,`t1`.`aprt_UserPerId`,`t3`.`PER_TEL1`,`t3`.`PER_TEL2`,`t3`.`PER_DIR_COLONIA`,`t3`.`PER_DIR_CP`,`t3`.`PER_DIR_CALLE`,`t3`.`PER_DIR_NUM_EXT`,`t3`.`PER_DIR_NUM_INT`,`t3`.`PER_EMAIL`;
+
+-- ----------------------------
+-- View structure for view_asistencias
+-- ----------------------------
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `view_asistencias` AS select concat(`t2`.`PER_NOMBRE`,_latin1' ',`t2`.`PER_PATERNO`,_latin1' ',`t2`.`PER_MATERNO`) AS `CLIENTE`,if((`t1`.`ast_PertpPerTipo` = _latin1'C'),_utf8'CLIENTE',_utf8'USUARIO') AS `TIPO`,date_format(`t1`.`ast_FechaHora`,_utf8'%d/%m/%y') AS `FECHA`,time_format(`t1`.`ast_FechaHora`,_utf8'%H:%i') AS `HORA`,`t1`.`ast_FechaHora` AS `FECHA_HORA`,`t2`.`PER_ID` AS `CLAVE_cLTE`,`t1`.`ast_Id` AS `CLAVE_ASTS` from (`asistencias` `T1` join `persona` `T2`) where (`t1`.`ast_PertpPerId` = `t2`.`PER_ID`);
+
+-- ----------------------------
+-- View structure for view_cambios
+-- ----------------------------
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `view_cambios` AS select `t1`.`cmb_Fecha` AS `FECHA_DEVO`,`t1`.`cmb_FolioVenta` AS `FOLIO_VENTA`,`t7`.`vent_FechaHora` AS `FECHA_VENTA`,(to_days(`t1`.`cmb_Fecha`) - to_days(`t7`.`vent_FechaHora`)) AS `DIAS`,concat(`t2`.`PER_NOMBRE`,_latin1' ',`t2`.`PER_PATERNO`,_latin1' ',`t2`.`PER_MATERNO`) AS `USUARIO_DEVO`,concat(`t3`.`PER_NOMBRE`,_latin1' ',`t3`.`PER_PATERNO`,_latin1' ',`t3`.`PER_MATERNO`) AS `CLIENTE`,`t1`.`cmb_Observaciones` AS `CMB_OBSERVACIONES`,`t1`.`cmb_FolioVentCambio` AS `FOLIO_DEVO`,`t6`.`cmbd_ProdSer_DevNombre` AS `DEV_PRODUCTO`,`t6`.`cmbd_ProdSer_DevPrecio` AS `DEV_PRECIO`,`t6`.`cmbd_ProdSer_CamNombre` AS `CAM_PRODUCTO`,`t6`.`cmbd_ProdSer_CamPrecio` AS `CAM_PRECIO`,`t6`.`cmbd_ProdSer_CamDescuento` AS `CAM_DESC`,`t6`.`cmbd_ProdSer_CamTotal` AS `CAM_TOTAL`,(`t6`.`cmbd_ProdSer_CamTotal` - `t6`.`cmbd_ProdSer_DevPrecio`) AS `TOT_DIF`,`t7`.`vent_SubTotal` AS `VENT_SUBTOTAL`,`t7`.`vent_Descuento` AS `VENT_dESCUENTO`,`t7`.`vent_Total` AS `VENT_TOTAL`,`t7`.`vent_pagado` AS `VENT_PAGADO`,`t7`.`vent_Cambio` AS `VENT_CAMBIO`,`t7`.`vent_PagoEfectivo` AS `VENT_PAGOEFECTIVO`,`t7`.`vent_PagoTarjeta` AS `VENT_PAGOTARJETA`,`t1`.`cmb_Id` AS `CMB_ID`,`t6`.`cmbd_ProdSer_DevCodigo` AS `PROD_DEVCODIGO`,`t6`.`cmbd_ProdSer_CamCodigo` AS `PROD_CAMCODIGO`,if((`t1`.`cmd_Tipo` = _latin1'V'),_utf8'VENTA',_utf8'APARTADO') AS `TIPO` from ((((`cambios` `T1` join `persona` `T2`) join `persona` `T3`) join `cambios_detalle` `T6`) join `ventas` `T7`) where ((`t1`.`cmb_UsuPerId` = `t2`.`PER_ID`) and (`t1`.`cmb_ClieperId` = `t3`.`PER_ID`) and (`t1`.`cmb_Id` = `t6`.`cmbd_Id`) and (`t1`.`cmb_FolioVenta` = `t6`.`cmbd_FolioVenta`) and (`t1`.`cmb_FolioVentCambio` = `t7`.`vent_IdFolio`));
+
+-- ----------------------------
+-- View structure for view_citas
+-- ----------------------------
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `view_citas` AS select `t1`.`agd_Id` AS `CLAVE`,`t1`.`agd_observaciones` AS `OBSERVACIONES`,concat(`t3`.`PER_NOMBRE`,_latin1' ',`t3`.`PER_PATERNO`,_latin1' ',`t3`.`PER_MATERNO`) AS `AGENDO`,concat(`t4`.`PER_NOMBRE`,_latin1' ',`t4`.`PER_PATERNO`,_latin1' ',`t4`.`PER_MATERNO`) AS `CLIENTE`,`t5`.`prod_Nombre` AS `SERVICIO`,`t6`.`ctpt_Tipo` AS `TIPO_SERVICIO`,date_format(`t2`.`agds_Inicio`,_utf8'%d/%m/%y') AS `FECHA`,time_format(`t2`.`agds_Inicio`,_utf8'%H:%i') AS `HORA_INI`,time_format(`t2`.`agds_Fin`,_utf8'%H:%i') AS `HORA_FIN`,`t2`.`agds_Inicio` AS `FECHA_INICIO`,`t2`.`agds_Status` AS `AGDS_STATUS`,concat(`t7`.`PER_NOMBRE`,_latin1' ',`t7`.`PER_PATERNO`,_latin1' ',`t7`.`PER_MATERNO`) AS `USUARIO`,`t7`.`PER_ID` AS `USUARIO_ID`,`t2`.`agds_FechaHora` AS `GENERADA`,`t2`.`agds_ServId` AS `SERV_ID`,`t2`.`agds_Usuario_Id` AS `USUARIO_PERTPID`,`t1`.`agd_Clie_perId` AS `CLIE_ID`,`t1`.`agd_Status` AS `STATUS_AGENDA` from ((((((`agenda` `T1` join `agenda_servicios` `T2`) join `persona` `T3`) join `persona` `T4`) join `productos` `T5`) join `cat_tipo` `T6`) join `persona` `T7`) where ((`t1`.`agd_Id` = `t2`.`agds_agdId`) and (`t1`.`agd_User_PerId` = `t3`.`PER_ID`) and (`t1`.`agd_Clie_perId` = `t4`.`PER_ID`) and (`t2`.`agds_ServId` = `t5`.`prod_Id`) and (`t5`.`prod_tipo` = `t6`.`ctpt_Id`) and (`t2`.`agds_Usuario_PerId` = `t7`.`PER_ID`) and (`t2`.`agds_Status` = _latin1'A'));
+
+-- ----------------------------
+-- View structure for view_comisiones_pago
+-- ----------------------------
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `view_comisiones_pago` AS select `t1`.`ctpg_Id` AS `CTPG_ID`,`t1`.`ctpg_Nombre` AS `CTPG_NOMBRE`,if((`t1`.`ctpg_TipoPago` = _latin1'C'),_utf8'COMISIONES',_utf8'HONORARIOS/PAGOS FIJOS') AS `TIPO_PAGO`,`t1`.`ctpg_IdPeriodo` AS `CTPG_IDPERIODO`,`t1`.`ctpg_Valor` AS `CTPG_VALOR`,if((`t1`.`ctpg_TipoValor` = _latin1'E'),_utf8'EFECTIVO',_utf8'PORCENTAJE') AS `TIPO_VALOR`,`t2`.`ctpr_Periodo` AS `CTPR_PERIODO`,concat(`t2`.`ctpr_Periodo`,_utf8' DIAS: ',`t2`.`ctpr_Dias`) AS `PERIODO`,`t2`.`ctpr_Dias` AS `ctpr_Dias`,`t1`.`ctpg_AplicaValores` AS `CTPG_APLICAVALORES`,if((`t1`.`ctpg_AplicaTipo` = NULL),_utf8'NO',if((`t1`.`ctpg_AplicaTipo` = _latin1'P'),_utf8'PRODUCTOS',_utf8'SERVICIOS')) AS `APLICA_TIPO`,if(isnull(`t1`.`ctpg_AplicaSubTipo`),_utf8'NO',if((`t1`.`ctpg_AplicaSubTipo` = _latin1'G'),_utf8'GENERAL',_utf8'SUBTIPOS')) AS `APLICA_SUBTIPO`,`t3`.`PG_STATUS` AS `PG_STATUS`,`t3`.`PG_FECHA_INI` AS `PG_FECHA_INI`,`t5`.`PER_ID` AS `PER_ID`,`t5`.`PER_NOMBRE` AS `PER_NOMBRE`,`t5`.`PER_PATERNO` AS `PER_PATERNO`,`t5`.`PER_MATERNO` AS `PER_MATERNO`,`t6`.`ctpt_Tipo` AS `CTPT_TIPO`,`t4`.`PERTP_USUARIO` AS `PERTP_USUARIO`,if((`t4`.`PERTP_STATUS` = _latin1'A'),_utf8'ACTIVO',_utf8'INACTIVO') AS `STATUS`,`t4`.`PERTP_TIPO_ID` AS `PERTP_TIPO_ID`,`t4`.`PERTP_PER_TIPO` AS `PERTP_PER_TIPO` from (((((`cat_pagos` `T1` join `cat_periodo` `T2`) join `comisiones` `T3`) join `per_tipo` `T4`) join `persona` `T5`) join `cat_tipo` `T6`) where ((`t1`.`ctpg_IdPeriodo` = `t2`.`ctid_Periodo`) and (`t1`.`ctpg_Id` = `t3`.`PG_CTPG_ID`) and (`t3`.`PG_PERTP_TIPO_ID` = `t4`.`PERTP_TIPO_ID`) and (`t3`.`PG_PERTP_PER_ID` = `t4`.`PERTP_PER_ID`) and (`t3`.`PG_STATUS` = _latin1'A') and (`t3`.`PG_PERTP_PER_TIPO` = `t4`.`PERTP_PER_TIPO`) and (`t4`.`PERTP_PER_ID` = `t5`.`PER_ID`) and (`t4`.`PERTP_TIPO_ID` = `t6`.`ctpt_Id`) and (`t4`.`PERTP_PER_TIPO` = `t6`.`ctpt_SubTipo`));
+
+-- ----------------------------
+-- View structure for view_gastos
+-- ----------------------------
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `view_gastos` AS select `t1`.`GST_ID` AS `ID`,`t1`.`GST_FECHAHORA` AS `FECHA_HORA`,concat(`t2`.`PER_NOMBRE`,_latin1' ',`t2`.`PER_PATERNO`,_latin1' ',`t2`.`PER_MATERNO`) AS `USUARIO`,`t3`.`ctpt_Tipo` AS `TIPO_GASTO`,`t1`.`GST_CANTIDAD` AS `CANTIDAD`,`t1`.`GST_TOTAL` AS `GASTO`,`t1`.`GST_DESCRIPCION` AS `GST_DESCRIPCION`,if((`t1`.`GST_COMPROBANTE` = _latin1'S'),_utf8'SI',_utf8'NO') AS `COMPROBANTE` from ((`gastos` `T1` join `persona` `T2`) join `cat_tipo` `T3`) where ((`t1`.`GST_USER_PERID` = `t2`.`PER_ID`) and (`t1`.`GST_TIPO_ID` = `t3`.`ctpt_Id`));
+
+-- ----------------------------
+-- View structure for view_membresias
+-- ----------------------------
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `view_membresias` AS select `t3`.`ctmb_Id` AS `ID`,`t3`.`ctmb_Nombre` AS `MEMBRESIA`,`t3`.`ctmb_Precio` AS `PRECIO`,`t3`.`ctmb_Dias` AS `DIAS_MEMBRESIA`,`t4`.`ctpr_Dias` AS `DIAS_PERIODO`,`t4`.`ctpr_Periodo` AS `PERIODO`,if((`t3`.`ctmb_Tipo` = _latin1'P'),_utf8'PERIODICO',_utf8'CONSECUTIVO') AS `TIPO` from (`cat_membresias` `T3` join `cat_periodo` `T4`) where (`t3`.`ctmb_periodoId` = `t4`.`ctid_Periodo`);
+
+-- ----------------------------
+-- View structure for view_membresias_asignadas
+-- ----------------------------
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `view_membresias_asignadas` AS select sql_no_cache `t1`.`mbr_ctmbId` AS `Clave_Membresia`,`t1`.`mbr_Inicio` AS `INICIO`,`t1`.`mbr_Fin` AS `FIN`,`t1`.`mbr_Fecha` AS `ADQUIRIO`,concat(`t2`.`PER_NOMBRE`,_latin1' ',`t2`.`PER_PATERNO`,_latin1' ',`t2`.`PER_MATERNO`) AS `CLIENTE`,`t3`.`ctmb_Nombre` AS `MEMBRESIA`,`t3`.`ctmb_Dias` AS `DIAS_MEM`,if((now() between `t1`.`mbr_Inicio` and `t1`.`mbr_Fin`),_utf8'VIGENTE',if((`t1`.`mbr_Inicio` > now()),_utf8'ANTICIPADA',_utf8'VENCIDO')) AS `STATUS`,`t2`.`PER_ID` AS `PER_ID`,`t4`.`ctpr_Dias` AS `DIAS_PER` from (((`membresias` `T1` join `persona` `T2`) join `cat_membresias` `T3`) join `cat_periodo` `T4`) where ((`t1`.`mbr_PERTP_PER_ID` = `t2`.`PER_ID`) and (`t1`.`mbr_ctmbId` = `t3`.`ctmb_Id`) and (`t3`.`ctmb_periodoId` = `t4`.`ctid_Periodo`) and (`t1`.`mbr_Status` = _latin1'A')) order by `t1`.`mbr_Fin` desc;
+
+-- ----------------------------
+-- View structure for view_pagos_apartado
+-- ----------------------------
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `view_pagos_apartado` AS select `t1`.`apPg_FolioAprt` AS `FOLIO_APRT`,date_format(`t1`.`apPg_FechaHora`,_utf8'%d/%m/%Y %H:%i') AS `FECHA`,sum(`t1`.`apPg_Pago`) AS `PAGO`,`t1`.`apPg_FolioVenta` AS `FOLIO_VENTA`,concat(`t2`.`PER_NOMBRE`,_latin1' ',`t2`.`PER_PATERNO`,_latin1' ',`t2`.`PER_MATERNO`) AS `MOSTRADOR`,`t3`.`vent_SubTotal` AS `SUBTOTAL`,`t3`.`vent_Descuento` AS `DESCUENTO`,`t3`.`vent_Total` AS `TOTAL`,`t3`.`vent_pagado` AS `PAGADO`,`t3`.`vent_Cambio` AS `CAMBIO`,`t3`.`vent_PagoEfectivo` AS `EFECTIVO`,`t3`.`vent_PagoTarjeta` AS `TARJETA`,`t3`.`vent_PagoCheque` AS `CHEQUE` from ((`pagos_apartados` `T1` join `persona` `T2`) join `ventas` `T3`) where ((`t1`.`paPg_MostPerId` = `t2`.`PER_ID`) and (`t1`.`apPg_FolioVenta` = `t3`.`vent_IdFolio`)) group by `t1`.`apPg_FolioAprt`,date_format(`t1`.`apPg_FechaHora`,_utf8'%d/%m/%Y %H:%i'),`t1`.`apPg_FolioVenta`,concat(`t2`.`PER_NOMBRE`,_latin1' ',`t2`.`PER_PATERNO`,_latin1' ',`t2`.`PER_MATERNO`),`t3`.`vent_SubTotal`,`t3`.`vent_Descuento`,`t3`.`vent_Total`,`t3`.`vent_pagado`,`t3`.`vent_Cambio`,`t3`.`vent_PagoEfectivo`,`t3`.`vent_PagoTarjeta`,`t3`.`vent_PagoCheque`;
+
+-- ----------------------------
+-- View structure for view_productos_inventario
+-- ----------------------------
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `view_productos_inventario` AS select `t1`.`prod_codigo` AS `CODIGO`,`t1`.`prod_Nombre` AS `NOMBRE`,`t2`.`ctmr_Marca` AS `MARCA`,if((`t1`.`prod_status` = _latin1'A'),_utf8'ACTIVO',_utf8'INACTIVO') AS `STATUS`,`t1`.`prod_Stock_Min` AS `STOCK_MIN`,`t1`.`prod_Stock_Max` AS `STOCK_MAX`,`t1`.`prod_precio` AS `PRECIO_VENTA`,`t1`.`prod_cant` AS `CANTIDAD`,`t3`.`ctpt_Tipo` AS `TIPO`,`t1`.`prod_status` AS `ID_STATUS`,`t1`.`prod_descripcion` AS `DESCRIPCION`,`t1`.`prod_Presentacion` AS `PRESENTACION`,`t4`.`ctPs_Nombre` AS `UNIDAD_MEDIDA`,`t1`.`prod_Alta_Fecha` AS `FECHA`,concat(`t5`.`PER_NOMBRE`,_latin1' ',`t5`.`PER_PATERNO`,_latin1' ',`t5`.`PER_MATERNO`) AS `USUARIO`,concat(`t7`.`PER_ALIAS`,_latin1' - ',`t7`.`PER_NOMBRE`,_latin1' ',`t7`.`PER_PATERNO`,_latin1' ',`t7`.`PER_MATERNO`) AS `PROVEEDOR`,`t1`.`prod_precio_costo` AS `PRECIO_COSTO`,`t1`.`prod_Foto` AS `FOTO`,if((`t1`.`prod_subtipo` = _latin1'P'),_utf8'PRODUCTO',_utf8'SERVICIO') AS `SUBTIPO`,`t1`.`prod_Foto` AS `PROD_FOTO` from (`persona` `T5` join ((((`productos` `T1` left join `persona` `T7` on((`t7`.`PER_ID` = `t1`.`prod_Proveedor`))) left join `cat_marca` `T2` on((`t1`.`prod_marca` = `t2`.`ctmr_Id`))) left join `cat_tipo` `T3` on(((`t1`.`prod_tipo` = `t3`.`ctpt_Id`) and (`t1`.`prod_subtipo` = `t3`.`ctpt_SubTipo`)))) left join `cat_presentacion` `T4` on((`t1`.`prod_UniMed_Present` = `t4`.`ctPs_Id`)))) where (`t1`.`prod_PerAlta_Id` = `t5`.`PER_ID`);
+
+-- ----------------------------
+-- View structure for view_ventas
+-- ----------------------------
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `view_ventas` AS select sql_no_cache `t1`.`vent_IdFolio` AS `FOLIO`,`t1`.`vent_FechaHora` AS `FECHAHORA`,`t1`.`vent_Status` AS `ID_STATUS`,if((`t1`.`vent_Status` = _latin1'G'),_utf8'ABIERTO',if((`t1`.`vent_Status` = _latin1'P'),_utf8'CERRADO',if((`t1`.`vent_Status` = _latin1'C'),_utf8'CANCELADO',if((`t1`.`vent_Status` = _latin1'A'),_utf8'APARTADOS',if((`t1`.`vent_Status` = _latin1'B'),_utf8'CAMBIOS',_utf8'OTRO'))))) AS `STATUS`,concat(`t2`.`PER_NOMBRE`,_latin1' ',`t2`.`PER_PATERNO`,_latin1' ',`t2`.`PER_MATERNO`) AS `USUARIO`,concat(`t3`.`PER_NOMBRE`,_latin1' ',`t3`.`PER_PATERNO`,_latin1' ',`t3`.`PER_MATERNO`) AS `CLIENTE`,(select sql_no_cache count(0) AS `COUNT(*)` from `venta_detalle` `T4` where (`t4`.`venDet_Folio` = `t1`.`vent_IdFolio`)) AS `OPERACIONES`,(select sql_no_cache sum((`t4`.`venDet_Cantidad` * `t4`.`venDet_Precio`)) AS `SUM(T4.VENDET_CANTIDAD * T4.VENDET_PRECIO)` from `venta_detalle` `T4` where (`t4`.`venDet_Folio` = `t1`.`vent_IdFolio`)) AS `SUB_TOTAL`,(select sql_no_cache sum(`t4`.`venDet_Descuento`) AS `SUM(VENDET_DESCUENTO)` from `venta_detalle` `T4` where (`t4`.`venDet_Folio` = `t1`.`vent_IdFolio`)) AS `DESCUENTO`,(select sql_no_cache sum(((`t4`.`venDet_Cantidad` * `t4`.`venDet_Precio`) - `t4`.`venDet_Descuento`)) AS `SUM(T4.VENDET_CANTIDAD * T4.VENDET_PRECIO - VENDET_DESCUENTO)` from `venta_detalle` `T4` where (`t4`.`venDet_Folio` = `t1`.`vent_IdFolio`)) AS `TOTAL`,`t1`.`vent_VendPerId` AS `USU_PERID`,`t1`.`vent_VendTipoId` AS `USU_TIPOID`,`t1`.`vent_VendTipo` AS `USU_TIPO`,`t1`.`vent_CliePerId` AS `CLIE_PERID`,`t1`.`vent_ClieTipoId` AS `CLIE_TIPOID`,`t1`.`vent_ClieTipo` AS `CLIE_TIPO`,`t3`.`PER_EMAIL` AS `CLIE_EMAIL`,`t5`.`TEMP_MONEDERO` AS `MONEDERO` from (((`ventas` `T1` join `persona` `T2`) join `persona` `T3`) join `per_tipo` `T5`) where ((date_format(`t1`.`vent_FechaHora`,_utf8'%x-%m-%d') = date_format(now(),_utf8'%x-%m-%d')) and (`t1`.`vent_VendPerId` = `t2`.`PER_ID`) and (`t1`.`vent_CliePerId` = `t3`.`PER_ID`) and (`t3`.`PER_ID` = `t5`.`PERTP_PER_ID`));
+
+-- ----------------------------
+-- View structure for view_ventasdetalle
+-- ----------------------------
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `view_ventasdetalle` AS select sql_no_cache `t2`.`vent_FechaHora` AS `FECHA_HORA`,concat(`t3`.`PER_NOMBRE`,_latin1' ',`t3`.`PER_PATERNO`,_latin1' ',`t3`.`PER_MATERNO`) AS `USUARIO`,concat(`t4`.`PER_NOMBRE`,_latin1' ',`t4`.`PER_PATERNO`,_latin1' ',`t4`.`PER_MATERNO`) AS `CLIENTE`,`t2`.`vent_IdFolio` AS `FOLIO`,`t1`.`venDet_ProdCodigo` AS `CODIGO`,`t1`.`venDet_ProductoNombre` AS `PRODUCTO`,`t1`.`venDet_Precio` AS `PRECIO`,`t1`.`venDet_Cantidad` AS `CANTIDAD`,`t1`.`venDet_Descuento` AS `DESCUENTO`,(to_days(now()) - to_days(`t2`.`vent_FechaHora`)) AS `DIAS`,`t2`.`vent_ClieTipoId` AS `CLIE_ID`,`t2`.`vent_CliePerId` AS `CLIE_PERID`,`t2`.`vent_ClieTipo` AS `CLIE_TIPO`,`t1`.`venDet_vendTipoId` AS `VEND_ID`,`t1`.`venDet_VendPerId` AS `VEND_PERID`,`t1`.`venDet_vendTipo` AS `VEND_TIPO`,`t1`.`venDet_ProductoId` AS `PROD_ID`,`t1`.`venDet_ProdServ` AS `PROD_SER`,if((`t1`.`venDet_ProdServ` = _latin1'P'),_utf8'PRODUCTO',_utf8'SERVICIO') AS `TIPO_PROD`,`t1`.`venDet_Descripcion` AS `DESCRIPCION` from (((`venta_detalle` `T1` join `ventas` `T2`) join `persona` `T3`) join `persona` `T4`) where ((`t1`.`venDet_Folio` = `t2`.`vent_IdFolio`) and (`t1`.`venDet_VendPerId` = `t3`.`PER_ID`) and (`t2`.`vent_CliePerId` = `t4`.`PER_ID`));
+
+-- ----------------------------
+-- Records 

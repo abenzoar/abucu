@@ -1,0 +1,5 @@
+Agregar en cattipo el valor PROVEEDOR GENERAL Y poner como tipo V
+agregar en persona per_alias
+Agregar en producto precio_costo
+
+update cat_apartados set aprt_userid = aprt_mostid, aprt_userperid = aprt_mostperid, aprt_userpertipo = aprt_mostpertipo;
